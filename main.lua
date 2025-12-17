@@ -1,9 +1,8 @@
 --==================================================
 -- NOXYLON Private Script
--- UI UNCHANGED | RUNTIME FIXED
+-- UI UNCHANGED | LOGIC UPDATED
 --==================================================
 
---================ SAFE START ======================
 repeat task.wait() until game:IsLoaded()
 
 --================ SERVICES ========================
@@ -11,12 +10,11 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local Camera = workspace.CurrentCamera
-
---================ FORWARD DECLARATIONS ============
-local refreshESP -- <<< KLÍČOVÝ FIX
+local GuiInset = game:GetService("GuiService"):GetGuiInset()
 
 --================ CONFIG ==========================
 local Config = {
@@ -148,7 +146,6 @@ local function Toggle(parent,text,y,cb)
 	b.Font = Enum.Font.Gotham
 	b.TextSize = 14
 	Instance.new("UICorner",b)
-
 	b.Text = text..": OFF"
 
 	b.MouseButton1Click:Connect(function()
@@ -181,7 +178,7 @@ local function Slider(parent,text,y,min,max,val,cb)
 	local function set(v)
 		v = math.clamp(v,min,max)
 		fill.Size = UDim2.new((v-min)/(max-min),0,1,0)
-		lbl.Text = text..": "..math.floor(v)
+		lbl.Text = text..": "..string.format("%.2f",v)
 	end
 	set(val)
 
@@ -199,43 +196,116 @@ end
 --================ AIMBOT UI ======================
 Toggle(Pages.Aimbot,"Enable Aimbot",10,function(v) Config.Aimbot=v end)
 Toggle(Pages.Aimbot,"Show FOV",60,function(v) Config.ShowFOV=v end)
-
 Slider(Pages.Aimbot,"FOV",110,50,400,Config.FOV,function(v) Config.FOV=v end)
 Slider(Pages.Aimbot,"Smoothing",170,0.05,0.5,Config.Smoothing,function(v) Config.Smoothing=v end)
 
 --================ ESP UI =========================
-Toggle(Pages.ESP,"Glow ESP",10,function(v)
-	Config.ESP = v
-	refreshESP()
-end)
+Toggle(Pages.ESP,"Glow ESP",10,function(v) Config.ESP=v end)
 Toggle(Pages.ESP,"Team Check",60,function(v) Config.TeamCheck=v end)
 Toggle(Pages.ESP,"Wall Check",110,function(v) Config.WallCheck=v end)
 
---================ ESP LOGIC ======================
-local ESP = {}
+--================ FOV CIRCLE =====================
+local FOVCircle = Instance.new("Frame", ScreenGui)
+FOVCircle.BackgroundTransparency = 1
+local stroke = Instance.new("UIStroke",FOVCircle)
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(0,170,255)
+Instance.new("UICorner",FOVCircle).CornerRadius = UDim.new(1,0)
 
-refreshESP = function()
-	for _,h in pairs(ESP) do h:Destroy() end
-	table.clear(ESP)
-	if not Config.ESP then return end
-
-	for _,p in pairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer then
-			local function apply(c)
-				if c then
-					local h = Instance.new("Highlight",c)
-					h.FillTransparency = 1
-					h.OutlineColor = Color3.fromRGB(0,170,255)
-					table.insert(ESP,h)
-				end
-			end
-			if p.Character then apply(p.Character) end
-			p.CharacterAdded:Connect(apply)
-		end
+RunService.RenderStepped:Connect(function()
+	if not Config.ShowFOV then
+		FOVCircle.Visible = false
+		return
 	end
+
+	local m = UIS:GetMouseLocation()
+	FOVCircle.Visible = true
+	FOVCircle.Size = UDim2.fromOffset(Config.FOV*2,Config.FOV*2)
+	FOVCircle.Position = UDim2.fromOffset(
+		m.X - Config.FOV,
+		m.Y - Config.FOV - GuiInset.Y
+	)
+end)
+
+--================ WALL CHECK ======================
+local function Visible(part)
+	if not Config.WallCheck then return true end
+	local origin = Camera.CFrame.Position
+	local dir = part.Position - origin
+	local params = RaycastParams.new()
+	params.FilterDescendantsInstances = {LocalPlayer.Character}
+	params.FilterType = Enum.RaycastFilterType.Blacklist
+	local ray = workspace:Raycast(origin,dir,params)
+	return ray and ray.Instance:IsDescendantOf(part.Parent)
 end
 
---================ KEY =============================
+--================ TARGET ==========================
+local function GetTarget()
+	local best,dist = nil,Config.FOV
+	for _,p in pairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and p.Character then
+			if Config.TeamCheck and p.Team == LocalPlayer.Team then continue end
+			local part = p.Character:FindFirstChild(Config.AimPart)
+			if part and Visible(part) then
+				local pos,on = Camera:WorldToViewportPoint(part.Position)
+				if on then
+					local d = (Vector2.new(pos.X,pos.Y) - UIS:GetMouseLocation()).Magnitude
+					if d < dist then
+						dist = d
+						best = part
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
+--================ AIMBOT =========================
+RunService.RenderStepped:Connect(function()
+	if Config.Aimbot and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+		local t = GetTarget()
+		if t then
+			Camera.CFrame = Camera.CFrame:Lerp(
+				CFrame.lookAt(Camera.CFrame.Position, t.Position),
+				Config.Smoothing
+			)
+		end
+	end
+end)
+
+--================ MISC PAGE ======================
+local info = Instance.new("TextLabel", Pages.Misc)
+info.Size = UDim2.new(1,0,0,80)
+info.Position = UDim2.new(0,0,0,10)
+info.BackgroundTransparency = 1
+info.TextWrapped = true
+info.TextXAlignment = Enum.TextXAlignment.Left
+info.TextYAlignment = Enum.TextYAlignment.Top
+info.Font = Enum.Font.Gotham
+info.TextSize = 14
+info.TextColor3 = Color3.fromRGB(180,180,180)
+info.Text = "NOXYLON Private Script\nLicense: checking..."
+
+--================ KEYAUTH EXPIRY =================
+task.spawn(function()
+	if not isfile or not readfile or not isfile("noxylon_key.txt") then return end
+	local key = readfile("noxylon_key.txt")
+
+	local url =
+		"https://keyauth.win/api/1.1/?" ..
+		"name=NOXYLON&ownerid=3OwFa1bM69&type=license&key=" ..
+		key .. "&ver=1.0"
+
+	local res = HttpService:JSONDecode(game:HttpGet(url))
+	if res and res.success then
+		local exp = tonumber(res.info.expires)
+		local days = math.max(0, math.floor((exp - os.time()) / 86400))
+		info.Text = "NOXYLON Private Script\nLicense expires in "..days.." day(s)"
+	end
+end)
+
+--================ TOGGLE GUI =====================
 UIS.InputBegan:Connect(function(i,gp)
 	if not gp and i.KeyCode == Enum.KeyCode.Insert then
 		Main.Visible = not Main.Visible
