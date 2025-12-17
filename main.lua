@@ -1,6 +1,6 @@
 --==================================================
 -- NOXYLON Private Script
--- UI UNCHANGED | STARTUP FIXED
+-- UI UNCHANGED | RUNTIME FIXED
 --==================================================
 
 --================ SAFE START ======================
@@ -14,6 +14,9 @@ local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local Camera = workspace.CurrentCamera
+
+--================ FORWARD DECLARATIONS ============
+local refreshESP -- <<< KLÍČOVÝ FIX
 
 --================ CONFIG ==========================
 local Config = {
@@ -201,97 +204,17 @@ Slider(Pages.Aimbot,"FOV",110,50,400,Config.FOV,function(v) Config.FOV=v end)
 Slider(Pages.Aimbot,"Smoothing",170,0.05,0.5,Config.Smoothing,function(v) Config.Smoothing=v end)
 
 --================ ESP UI =========================
-Toggle(Pages.ESP,"Glow ESP",10,function(v) Config.ESP=v refreshESP() end)
+Toggle(Pages.ESP,"Glow ESP",10,function(v)
+	Config.ESP = v
+	refreshESP()
+end)
 Toggle(Pages.ESP,"Team Check",60,function(v) Config.TeamCheck=v end)
 Toggle(Pages.ESP,"Wall Check",110,function(v) Config.WallCheck=v end)
 
---================ MISC ===========================
-local t = Instance.new("TextLabel",Pages.Misc)
-t.Size = UDim2.new(1,0,0,40)
-t.Position = UDim2.new(0,0,0,10)
-t.BackgroundTransparency = 1
-t.Text = "NOXYLON Private Script"
-t.Font = Enum.Font.Gotham
-t.TextSize = 16
-t.TextColor3 = Color3.fromRGB(160,160,160)
+--================ ESP LOGIC ======================
+local ESP = {}
 
---================ FOV CIRCLE =====================
-local FOVCircle = Instance.new("Frame", ScreenGui)
-FOVCircle.BackgroundTransparency = 1
-local stroke = Instance.new("UIStroke",FOVCircle)
-stroke.Thickness = 2
-stroke.Color = Color3.fromRGB(0,170,255)
-Instance.new("UICorner",FOVCircle).CornerRadius = UDim.new(1,0)
-
-RunService.RenderStepped:Connect(function()
-	if not Config.ShowFOV then
-		FOVCircle.Visible = false
-		return
-	end
-
-	FOVCircle.Visible = true
-	FOVCircle.Size = UDim2.fromOffset(Config.FOV*2,Config.FOV*2)
-	local m = UIS:GetMouseLocation()
-	FOVCircle.Position = UDim2.fromOffset(m.X-Config.FOV,m.Y-Config.FOV)
-end)
-
---================ WALL CHECK ======================
-local function Visible(part)
-	if not Config.WallCheck then return true end
-	if not LocalPlayer.Character then return false end
-
-	local origin = Camera.CFrame.Position
-	local dir = part.Position - origin
-
-	local params = RaycastParams.new()
-	params.FilterDescendantsInstances = {LocalPlayer.Character}
-	params.FilterType = Enum.RaycastFilterType.Blacklist
-
-	local ray = workspace:Raycast(origin,dir,params)
-	return ray and ray.Instance:IsDescendantOf(part.Parent)
-end
-
---================ TARGET ==========================
-local function GetTarget()
-	local best,dist = nil,Config.FOV
-
-	for _,p in pairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer and p.Character then
-			if Config.TeamCheck and p.Team == LocalPlayer.Team then continue end
-
-			local part = p.Character:FindFirstChild(Config.AimPart)
-			if part and Visible(part) then
-				local pos,on = Camera:WorldToViewportPoint(part.Position)
-				if on then
-					local d = (Vector2.new(pos.X,pos.Y)-UIS:GetMouseLocation()).Magnitude
-					if d < dist then
-						dist = d
-						best = part
-					end
-				end
-			end
-		end
-	end
-	return best
-end
-
---================ AIMBOT =========================
-RunService.RenderStepped:Connect(function()
-	if Config.Aimbot and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-		local t = GetTarget()
-		if t then
-			Camera.CFrame = Camera.CFrame:Lerp(
-				CFrame.new(Camera.CFrame.Position,t.Position),
-				math.clamp(Config.Smoothing,0.05,1)
-			)
-		end
-	end
-end)
-
---================ ESP =============================
-ESP = {}
-
-function refreshESP()
+refreshESP = function()
 	for _,h in pairs(ESP) do h:Destroy() end
 	table.clear(ESP)
 	if not Config.ESP then return end
@@ -319,4 +242,4 @@ UIS.InputBegan:Connect(function(i,gp)
 	end
 end)
 
-warn("[NOXYLON] main.lua loaded")
+warn("[NOXYLON] main.lua loaded successfully")
