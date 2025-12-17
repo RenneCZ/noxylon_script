@@ -1,6 +1,6 @@
 --==================================================
 -- NOXYLON Private Script
--- UI UNCHANGED | LOGIC FIXED
+-- UI UNCHANGED | ESP LOGIC FIXED
 --==================================================
 
 repeat task.wait() until game:IsLoaded()
@@ -163,153 +163,41 @@ Toggle(Pages.Aimbot,"Show FOV",60,function(v) Config.ShowFOV=v end)
 --================ ESP UI =========================
 Toggle(Pages.ESP,"Glow ESP",10,function(v)
 	Config.ESP = v
+	if v then
+		-- apply immediately
+		for _,p in pairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character then
+				local h = Instance.new("Highlight")
+				h.Adornee = p.Character
+				h.FillTransparency = 1
+				h.OutlineColor = Color3.fromRGB(0,170,255)
+				h.Parent = ScreenGui
+			end
+		end
+	else
+		-- remove all highlights
+		for _,h in pairs(ScreenGui:GetChildren()) do
+			if h:IsA("Highlight") then
+				h:Destroy()
+			end
+		end
+	end
 end)
+
 Toggle(Pages.ESP,"Team Check",60,function(v) Config.TeamCheck=v end)
 Toggle(Pages.ESP,"Wall Check",110,function(v) Config.WallCheck=v end)
 
---================ ESP LOGIC (FIXED) ===============
-local ESP = {}
-
-local function clearESP()
-	for _,h in pairs(ESP) do
-		if h and h.Parent then
-			h:Destroy()
+--================ PLAYER HANDLERS =================
+Players.PlayerAdded:Connect(function(p)
+	p.CharacterAdded:Connect(function(char)
+		if Config.ESP and p ~= LocalPlayer then
+			local h = Instance.new("Highlight")
+			h.Adornee = char
+			h.FillTransparency = 1
+			h.OutlineColor = Color3.fromRGB(0,170,255)
+			h.Parent = ScreenGui
 		end
-	end
-	table.clear(ESP)
-end
-
-local function applyESP(char)
-	if not Config.ESP then return end
-	if not char then return end
-
-	local h = Instance.new("Highlight")
-	h.Adornee = char
-	h.FillTransparency = 1
-	h.OutlineColor = Color3.fromRGB(0,170,255)
-	h.Parent = char
-
-	table.insert(ESP, h)
-end
-
-local function refreshESP()
-	clearESP()
-	if not Config.ESP then return end
-
-	for _,p in pairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer then
-			if p.Character then
-				applyESP(p.Character)
-			end
-			p.CharacterAdded:Connect(applyESP)
-		end
-	end
-end
-
--- průběžný refresh
-task.spawn(function()
-	while true do
-		task.wait(1)
-		if Config.ESP then
-			refreshESP()
-		end
-	end
-end)
-
---================ FOV CIRCLE =====================
-local FOVCircle = Instance.new("Frame", ScreenGui)
-FOVCircle.BackgroundTransparency = 1
-local stroke = Instance.new("UIStroke",FOVCircle)
-stroke.Thickness = 2
-stroke.Color = Color3.fromRGB(0,170,255)
-Instance.new("UICorner",FOVCircle).CornerRadius = UDim.new(1,0)
-
-RunService.RenderStepped:Connect(function()
-	if not Config.ShowFOV then
-		FOVCircle.Visible = false
-		return
-	end
-
-	local m = UIS:GetMouseLocation()
-	FOVCircle.Visible = true
-	FOVCircle.Size = UDim2.fromOffset(Config.FOV*2,Config.FOV*2)
-	FOVCircle.Position = UDim2.fromOffset(
-		m.X - Config.FOV,
-		m.Y - Config.FOV - GuiInset.Y
-	)
-end)
-
---================ AIMBOT =========================
-local function GetTarget()
-	local best,dist = nil,Config.FOV
-	for _,p in pairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer and p.Character then
-			if Config.TeamCheck and p.Team == LocalPlayer.Team then continue end
-			local part = p.Character:FindFirstChild(Config.AimPart)
-			if part then
-				local pos,on = Camera:WorldToViewportPoint(part.Position)
-				if on then
-					local d = (Vector2.new(pos.X,pos.Y)-UIS:GetMouseLocation()).Magnitude
-					if d < dist then
-						dist = d
-						best = part
-					end
-				end
-			end
-		end
-	end
-	return best
-end
-
-RunService.RenderStepped:Connect(function()
-	if Config.Aimbot and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-		local t = GetTarget()
-		if t then
-			Camera.CFrame = Camera.CFrame:Lerp(
-				CFrame.lookAt(Camera.CFrame.Position,t.Position),
-				Config.Smoothing
-			)
-		end
-	end
-end)
-
---================ MISC INFO ======================
-local info = Instance.new("TextLabel", Pages.Misc)
-info.Size = UDim2.new(1,0,0,60)
-info.Position = UDim2.new(0,0,0,10)
-info.BackgroundTransparency = 1
-info.Font = Enum.Font.Gotham
-info.TextSize = 14
-info.TextWrapped = true
-info.TextColor3 = Color3.fromRGB(180,180,180)
-info.Text = "NOXYLON Private Script\nExpires: checking..."
-
---================ KEYAUTH EXPIRY (FIXED) ========
-task.spawn(function()
-	task.wait(2)
-	if not isfile or not readfile or not isfile("noxylon_key.txt") then
-		info.Text = "NOXYLON Private Script\nExpires: unknown"
-		return
-	end
-
-	local key = readfile("noxylon_key.txt")
-
-	local url =
-		"https://keyauth.win/api/1.1/?" ..
-		"name=NOXYLON" ..
-		"&ownerid=3OwFa1bM69" ..
-		"&type=license" ..
-		"&key=" .. key ..
-		"&ver=1.0"
-
-	local res = HttpService:JSONDecode(game:HttpGet(url))
-	if res and res.success and res.info then
-		local exp = tonumber(res.info.expires)
-		local days = math.max(0, math.floor((exp - os.time()) / 86400))
-		info.Text = "NOXYLON Private Script\nExpires in "..days.." day(s)"
-	else
-		info.Text = "NOXYLON Private Script\nExpires: invalid"
-	end
+	end)
 end)
 
 --================ TOGGLE GUI =====================
