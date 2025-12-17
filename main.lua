@@ -187,7 +187,7 @@ end)
 Toggle(Pages.ESP,"Team Check",60,function(v) Config.TeamCheck=v end)
 Toggle(Pages.ESP,"Wall Check",110,function(v) Config.WallCheck=v end)
 
---================ PLAYER HANDLERS =================
+--================ PLAYER HANDLERS ================
 Players.PlayerAdded:Connect(function(p)
 	p.CharacterAdded:Connect(function(char)
 		if Config.ESP and p ~= LocalPlayer then
