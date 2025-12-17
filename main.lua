@@ -284,7 +284,7 @@ info.TextWrapped = true
 info.TextColor3 = Color3.fromRGB(180,180,180)
 info.Text = "NOXYLON Private Script\nExpires: checking..."
 
---================ KEYAUTH EXPIRY (FIXED) =========
+--================ KEYAUTH EXPIRY (FIXED) ========
 task.spawn(function()
 	task.wait(2)
 	if not isfile or not readfile or not isfile("noxylon_key.txt") then
