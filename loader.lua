@@ -26,6 +26,17 @@ local function notify(t)
 	})
 end
 
+
+--============================--
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "NOXYLON Loader"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.TextColor3 = Color3.fromRGB(0,170,255)
+title.TextXAlignment = Enum.TextXAlignment.Center
+
 --================ INIT =============================
 local init = game:HttpGet(
 	"https://keyauth.win/api/1.1/?" ..
