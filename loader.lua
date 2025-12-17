@@ -135,10 +135,24 @@ btn.MouseButton1Click:Connect(function()
 		status.Text = "Invalid license"
 		return
 	end
+		
+-- ================= KEYAUTH → MAIN TRANSFER =================
+getgenv().NOXYLON_AUTH = {
+	expiry = (
+		licData.info and (
+			licData.info.expiry
+			or licData.info.expires
+			or (licData.info.subscriptions
+				and licData.info.subscriptions[1]
+				and licData.info.subscriptions[1].expiry)
+		)
+	)
+		}
 
 	if writefile then
 		writefile(KEY_FILE, box.Text)
 	end
+
 
 	status.Text = "Loading script..."
 
