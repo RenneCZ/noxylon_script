@@ -1,7 +1,10 @@
 --==================================================
 -- NOXYLON Private Script
--- UI UNCHANGED | LOGIC FIXED | EXPIRY INFO ADDED
+-- UI UNCHANGED | STARTUP FIXED
 --==================================================
+
+--================ SAFE START ======================
+repeat task.wait() until game:IsLoaded()
 
 --================ SERVICES ========================
 local Players = game:GetService("Players")
@@ -9,11 +12,8 @@ local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
-local LocalPlayer = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local Camera = workspace.CurrentCamera
-
---================ KEYAUTH INFO ====================
-local KeyAuthInfo = getgenv().NOXYLON_KEYAUTH
 
 --================ CONFIG ==========================
 local Config = {
@@ -49,7 +49,7 @@ end
 LoadConfig()
 
 --================ GUI ROOT ========================
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
 ScreenGui.Name = "NOXYLON_GUI"
 ScreenGui.ResetOnSpawn = false
 
@@ -215,33 +215,6 @@ t.Font = Enum.Font.Gotham
 t.TextSize = 16
 t.TextColor3 = Color3.fromRGB(160,160,160)
 
-local expLabel = Instance.new("TextLabel",Pages.Misc)
-expLabel.Size = UDim2.new(1,0,0,30)
-expLabel.Position = UDim2.new(0,0,0,50)
-expLabel.BackgroundTransparency = 1
-expLabel.Font = Enum.Font.Gotham
-expLabel.TextSize = 14
-expLabel.TextColor3 = Color3.fromRGB(0,170,255)
-expLabel.Text = "License: Unknown"
-
-if KeyAuthInfo and KeyAuthInfo.expires then
-	task.spawn(function()
-		while true do
-			local remaining = KeyAuthInfo.expires - os.time()
-			if remaining <= 0 then
-				expLabel.Text = "License: EXPIRED"
-				expLabel.TextColor3 = Color3.fromRGB(255,80,80)
-				break
-			end
-			local d = math.floor(remaining/86400)
-			local h = math.floor((remaining%86400)/3600)
-			local m = math.floor((remaining%3600)/60)
-			expLabel.Text = string.format("License expires in %dd %dh %dm",d,h,m)
-			task.wait(30)
-		end
-	end)
-end
-
 --================ FOV CIRCLE =====================
 local FOVCircle = Instance.new("Frame", ScreenGui)
 FOVCircle.BackgroundTransparency = 1
@@ -255,6 +228,7 @@ RunService.RenderStepped:Connect(function()
 		FOVCircle.Visible = false
 		return
 	end
+
 	FOVCircle.Visible = true
 	FOVCircle.Size = UDim2.fromOffset(Config.FOV*2,Config.FOV*2)
 	local m = UIS:GetMouseLocation()
@@ -280,9 +254,11 @@ end
 --================ TARGET ==========================
 local function GetTarget()
 	local best,dist = nil,Config.FOV
+
 	for _,p in pairs(Players:GetPlayers()) do
 		if p ~= LocalPlayer and p.Character then
 			if Config.TeamCheck and p.Team == LocalPlayer.Team then continue end
+
 			local part = p.Character:FindFirstChild(Config.AimPart)
 			if part and Visible(part) then
 				local pos,on = Camera:WorldToViewportPoint(part.Position)
@@ -313,7 +289,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --================ ESP =============================
-local ESP = {}
+ESP = {}
 
 function refreshESP()
 	for _,h in pairs(ESP) do h:Destroy() end
@@ -342,3 +318,5 @@ UIS.InputBegan:Connect(function(i,gp)
 		Main.Visible = not Main.Visible
 	end
 end)
+
+warn("[NOXYLON] main.lua loaded")
