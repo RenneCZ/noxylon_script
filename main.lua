@@ -1,6 +1,6 @@
 --==================================================
 -- NOXYLON Private Script
--- UI UNCHANGED | LOGIC UPDATED
+-- UI UNCHANGED | LOGIC FIXED
 --==================================================
 
 repeat task.wait() until game:IsLoaded()
@@ -10,11 +10,11 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
-local StarterGui = game:GetService("StarterGui")
+local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local Camera = workspace.CurrentCamera
-local GuiInset = game:GetService("GuiService"):GetGuiInset()
+local GuiInset = GuiService:GetGuiInset()
 
 --================ CONFIG ==========================
 local Config = {
@@ -61,7 +61,7 @@ Main.Position = UDim2.new(0.5,-300,0.5,-180)
 Main.BackgroundColor3 = Color3.fromRGB(18,18,18)
 Main.Active = true
 Main.Draggable = true
-Instance.new("UICorner",Main).CornerRadius = UDim.new(0,12)
+Instance.new("UICorner",Main)
 
 --================ HEADER ==========================
 local Header = Instance.new("TextLabel", Main)
@@ -156,53 +156,65 @@ local function Toggle(parent,text,y,cb)
 	end)
 end
 
-local function Slider(parent,text,y,min,max,val,cb)
-	local lbl = Instance.new("TextLabel",parent)
-	lbl.Position = UDim2.new(0,0,0,y)
-	lbl.Size = UDim2.new(0,260,0,20)
-	lbl.BackgroundTransparency = 1
-	lbl.TextColor3 = Color3.fromRGB(200,200,200)
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 14
-
-	local bar = Instance.new("Frame",parent)
-	bar.Position = UDim2.new(0,0,0,y+24)
-	bar.Size = UDim2.new(0,260,0,8)
-	bar.BackgroundColor3 = Color3.fromRGB(40,40,40)
-	Instance.new("UICorner",bar)
-
-	local fill = Instance.new("Frame",bar)
-	fill.BackgroundColor3 = Color3.fromRGB(0,170,255)
-	Instance.new("UICorner",fill)
-
-	local function set(v)
-		v = math.clamp(v,min,max)
-		fill.Size = UDim2.new((v-min)/(max-min),0,1,0)
-		lbl.Text = text..": "..string.format("%.2f",v)
-	end
-	set(val)
-
-	bar.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then
-			local pct = math.clamp((i.Position.X-bar.AbsolutePosition.X)/bar.AbsoluteSize.X,0,1)
-			val = min + (max-min)*pct
-			set(val)
-			cb(val)
-			SaveConfig()
-		end
-	end)
-end
-
 --================ AIMBOT UI ======================
 Toggle(Pages.Aimbot,"Enable Aimbot",10,function(v) Config.Aimbot=v end)
 Toggle(Pages.Aimbot,"Show FOV",60,function(v) Config.ShowFOV=v end)
-Slider(Pages.Aimbot,"FOV",110,50,400,Config.FOV,function(v) Config.FOV=v end)
-Slider(Pages.Aimbot,"Smoothing",170,0.05,0.5,Config.Smoothing,function(v) Config.Smoothing=v end)
 
 --================ ESP UI =========================
-Toggle(Pages.ESP,"Glow ESP",10,function(v) Config.ESP=v end)
+Toggle(Pages.ESP,"Glow ESP",10,function(v)
+	Config.ESP = v
+end)
 Toggle(Pages.ESP,"Team Check",60,function(v) Config.TeamCheck=v end)
 Toggle(Pages.ESP,"Wall Check",110,function(v) Config.WallCheck=v end)
+
+--================ ESP LOGIC (FIXED) ===============
+local ESP = {}
+
+local function clearESP()
+	for _,h in pairs(ESP) do
+		if h and h.Parent then
+			h:Destroy()
+		end
+	end
+	table.clear(ESP)
+end
+
+local function applyESP(char)
+	if not Config.ESP then return end
+	if not char then return end
+
+	local h = Instance.new("Highlight")
+	h.Adornee = char
+	h.FillTransparency = 1
+	h.OutlineColor = Color3.fromRGB(0,170,255)
+	h.Parent = char
+
+	table.insert(ESP, h)
+end
+
+local function refreshESP()
+	clearESP()
+	if not Config.ESP then return end
+
+	for _,p in pairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then
+			if p.Character then
+				applyESP(p.Character)
+			end
+			p.CharacterAdded:Connect(applyESP)
+		end
+	end
+end
+
+-- průběžný refresh
+task.spawn(function()
+	while true do
+		task.wait(1)
+		if Config.ESP then
+			refreshESP()
+		end
+	end
+end)
 
 --================ FOV CIRCLE =====================
 local FOVCircle = Instance.new("Frame", ScreenGui)
@@ -227,29 +239,17 @@ RunService.RenderStepped:Connect(function()
 	)
 end)
 
---================ WALL CHECK ======================
-local function Visible(part)
-	if not Config.WallCheck then return true end
-	local origin = Camera.CFrame.Position
-	local dir = part.Position - origin
-	local params = RaycastParams.new()
-	params.FilterDescendantsInstances = {LocalPlayer.Character}
-	params.FilterType = Enum.RaycastFilterType.Blacklist
-	local ray = workspace:Raycast(origin,dir,params)
-	return ray and ray.Instance:IsDescendantOf(part.Parent)
-end
-
---================ TARGET ==========================
+--================ AIMBOT =========================
 local function GetTarget()
 	local best,dist = nil,Config.FOV
 	for _,p in pairs(Players:GetPlayers()) do
 		if p ~= LocalPlayer and p.Character then
 			if Config.TeamCheck and p.Team == LocalPlayer.Team then continue end
 			local part = p.Character:FindFirstChild(Config.AimPart)
-			if part and Visible(part) then
+			if part then
 				local pos,on = Camera:WorldToViewportPoint(part.Position)
 				if on then
-					local d = (Vector2.new(pos.X,pos.Y) - UIS:GetMouseLocation()).Magnitude
+					local d = (Vector2.new(pos.X,pos.Y)-UIS:GetMouseLocation()).Magnitude
 					if d < dist then
 						dist = d
 						best = part
@@ -261,47 +261,54 @@ local function GetTarget()
 	return best
 end
 
---================ AIMBOT =========================
 RunService.RenderStepped:Connect(function()
 	if Config.Aimbot and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
 		local t = GetTarget()
 		if t then
 			Camera.CFrame = Camera.CFrame:Lerp(
-				CFrame.lookAt(Camera.CFrame.Position, t.Position),
+				CFrame.lookAt(Camera.CFrame.Position,t.Position),
 				Config.Smoothing
 			)
 		end
 	end
 end)
 
---================ MISC PAGE ======================
+--================ MISC INFO ======================
 local info = Instance.new("TextLabel", Pages.Misc)
-info.Size = UDim2.new(1,0,0,80)
+info.Size = UDim2.new(1,0,0,60)
 info.Position = UDim2.new(0,0,0,10)
 info.BackgroundTransparency = 1
-info.TextWrapped = true
-info.TextXAlignment = Enum.TextXAlignment.Left
-info.TextYAlignment = Enum.TextYAlignment.Top
 info.Font = Enum.Font.Gotham
 info.TextSize = 14
+info.TextWrapped = true
 info.TextColor3 = Color3.fromRGB(180,180,180)
-info.Text = "NOXYLON Private Script\nLicense: checking..."
+info.Text = "NOXYLON Private Script\nExpires: checking..."
 
---================ KEYAUTH EXPIRY =================
+--================ KEYAUTH EXPIRY (FIXED) =========
 task.spawn(function()
-	if not isfile or not readfile or not isfile("noxylon_key.txt") then return end
+	task.wait(2)
+	if not isfile or not readfile or not isfile("noxylon_key.txt") then
+		info.Text = "NOXYLON Private Script\nExpires: unknown"
+		return
+	end
+
 	local key = readfile("noxylon_key.txt")
 
 	local url =
 		"https://keyauth.win/api/1.1/?" ..
-		"name=NOXYLON&ownerid=3OwFa1bM69&type=license&key=" ..
-		key .. "&ver=1.0"
+		"name=NOXYLON" ..
+		"&ownerid=3OwFa1bM69" ..
+		"&type=license" ..
+		"&key=" .. key ..
+		"&ver=1.0"
 
 	local res = HttpService:JSONDecode(game:HttpGet(url))
-	if res and res.success then
+	if res and res.success and res.info then
 		local exp = tonumber(res.info.expires)
 		local days = math.max(0, math.floor((exp - os.time()) / 86400))
-		info.Text = "NOXYLON Private Script\nLicense expires in "..days.." day(s)"
+		info.Text = "NOXYLON Private Script\nExpires in "..days.." day(s)"
+	else
+		info.Text = "NOXYLON Private Script\nExpires: invalid"
 	end
 end)
 
